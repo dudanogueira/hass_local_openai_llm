@@ -34,7 +34,7 @@ from openai.types.chat import (
 from openai.types.chat.chat_completion_message_function_tool_call_param import Function
 from openai.types.shared_params import FunctionDefinition, ResponseFormatJSONSchema
 
-from .tools.stop_talking import StopTalkingTool, StopTalkingNowException
+from .tools.stop_talking import StopTalkingTool
 
 try:
     from probatio import to_openapi as convert
@@ -824,7 +824,7 @@ class LocalAiEntity(Entity):
 
         client = self.entry.runtime_data
 
-        await self._run_agent_loop(
+        return await self._run_agent_loop(
             client, model_args, chat_log, strip_emojis, chat_log.conversation_id
         )
 
@@ -835,8 +835,10 @@ class LocalAiEntity(Entity):
         chat_log: conversation.ChatLog,
         strip_emojis: bool,
         conversation_id: str | None = None,
-    ) -> None:
+    ) -> bool:
         """Run the LLM agent loop with tool call iteration."""
+        halt_requested = False
+
         for iteration in range(MAX_TOOL_ITERATIONS):
             if iteration == MAX_TOOL_ITERATIONS - 1:
                 _LOGGER.debug("Max iterations reached, injecting stop message")
@@ -866,9 +868,24 @@ class LocalAiEntity(Entity):
                     )
                 ]
 
+                # Check for stop_talking tool call before merging into message chain
+                if not halt_requested:
+                    for content in turn_messages:
+                        if (
+                            isinstance(content, conversation.AssistantContent)
+                            and content.tool_calls
+                        ):
+                            halt_requested = any(
+                                tool
+                                for tool in content.tool_calls
+                                if tool.tool_name == "stop_talking"
+                            )
+                            break
+
                 model_args["messages"].extend(
                     [
-                        msg for content in turn_messages
+                        msg
+                        for content in turn_messages
                         if (
                             msg := await self._convert_content_to_chat_message(
                                 content, conversation_id
@@ -932,9 +949,6 @@ class LocalAiEntity(Entity):
                 _LOGGER.exception("API server returned an error")
                 msg = "API server returned an error. Check the system logs for further details."
                 raise HomeAssistantError(msg) from err
-            except StopTalkingNowException as err:
-                # Thrown from our stop_talking tool, re-raising to be caught by our caller in conversation.py
-                raise err
             except Exception as err:
                 _LOGGER.exception("Error handling API response")
                 msg = "Error handling API response. Check the system logs for further details."
@@ -942,6 +956,8 @@ class LocalAiEntity(Entity):
 
             if not chat_log.unresponded_tool_results:
                 break
+
+        return halt_requested
 
     @staticmethod
     def _inject_stop_directive(messages: list) -> list:

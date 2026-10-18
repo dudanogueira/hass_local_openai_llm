@@ -4,41 +4,39 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
 from homeassistant.components import conversation
 from homeassistant.core import HomeAssistant
 
 from homeassistant.helpers import llm
 
 from custom_components.local_openai.conversation import LocalAiConversationEntity
-from custom_components.local_openai.tools.stop_talking import (
-    StopTalkingNowException,
-    StopTalkingTool,
-)
+from custom_components.local_openai.tools.stop_talking import StopTalkingTool
 
 
 class TestStopTalkingTool:
     """Test StopTalkingTool behavior."""
 
-    async def test_raises_stop_talking_now_exception(self) -> None:
-        """Test that StopTalkingTool raises StopTalkingNowException when called."""
+    async def test_returns_empty_tool_result(self) -> None:
+        """Test that StopTalkingTool returns an empty ToolResult when called."""
         tool = StopTalkingTool()
         hass = MagicMock()
         tool_input = MagicMock(spec=llm.ToolInput)
         llm_context = MagicMock(spec=llm.LLMContext)
 
-        with pytest.raises(StopTalkingNowException):
-            await tool.async_call(hass, tool_input, llm_context)
+        result = await tool.async_call(hass, tool_input, llm_context)
+
+        assert isinstance(result, llm.ToolResult)
+        assert result.data == {}
 
 
 class TestStopTalkingSetsContinueConversation:
-    """Test that StopTalkingNowException sets continue_conversation to False."""
+    """Test that stop_talking detection sets continue_conversation to False."""
 
     async def test_stop_talking_sets_continue_conversation_false(
         self,
         hass: HomeAssistant,
     ) -> None:
-        """Test that stop_talking exception sets continue_conversation to False."""
+        """Test that stop_talking detection sets continue_conversation to False."""
         entry = MagicMock()
         entry.data = {}
         entry.runtime_data = MagicMock()
@@ -58,10 +56,7 @@ class TestStopTalkingSetsContinueConversation:
         chat_log.llm_input_provided_index = 0
         chat_log.async_provide_llm_data = AsyncMock()
 
-        async def raise_stop_talking(*args, **kwargs):
-            raise StopTalkingNowException()
-
-        entity._async_handle_chat_log = AsyncMock(side_effect=raise_stop_talking)
+        entity._async_handle_chat_log = AsyncMock(return_value=True)
 
         with patch(
             "custom_components.local_openai.conversation.llm.async_get_apis",
@@ -101,10 +96,7 @@ class TestStopTalkingSetsContinueConversation:
         chat_log.llm_input_provided_index = 0
         chat_log.async_provide_llm_data = AsyncMock()
 
-        async def raise_stop_talking(*args, **kwargs):
-            raise StopTalkingNowException()
-
-        entity._async_handle_chat_log = AsyncMock(side_effect=raise_stop_talking)
+        entity._async_handle_chat_log = AsyncMock(return_value=True)
 
         with patch(
             "custom_components.local_openai.conversation.llm.async_get_apis",
@@ -144,7 +136,7 @@ class TestStopTalkingSetsContinueConversation:
         chat_log.llm_input_provided_index = 0
         chat_log.async_provide_llm_data = AsyncMock()
 
-        entity._async_handle_chat_log = AsyncMock()
+        entity._async_handle_chat_log = AsyncMock(return_value=False)
 
         with patch(
             "custom_components.local_openai.conversation.llm.async_get_apis",

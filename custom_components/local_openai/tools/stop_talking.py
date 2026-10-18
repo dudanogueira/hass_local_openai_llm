@@ -7,12 +7,8 @@ from homeassistant.helpers import llm
 from custom_components.local_openai.const import DOMAIN, LOGGER
 
 
-class StopTalkingNowException(Exception):
-    pass
-
-
 class StopTalkingTool(llm.Tool):
-    """Stop Talking tool: used to instruct the harness to NOT continue the conversation"""
+    """Stop Talking tool: used to instruct the harness to NOT continue the conversation."""
 
     integration = DOMAIN
 
@@ -26,5 +22,6 @@ class StopTalkingTool(llm.Tool):
         tool_input: llm.ToolInput,
         llm_context: llm.LLMContext,
     ) -> llm.ToolResult:
+        """Call the stop talking tool."""
         LOGGER.debug("StopTalkingTool called by LLM")
-        raise StopTalkingNowException
+        return llm.ToolResult(data={})
