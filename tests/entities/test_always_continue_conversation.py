@@ -5,11 +5,10 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from homeassistant.components import conversation
-from homeassistant.core import HomeAssistant
-
 from custom_components.local_openai.const import CONF_ALWAYS_CONTINUE_CONVERSATION
 from custom_components.local_openai.conversation import LocalAiConversationEntity
+from homeassistant.components import conversation
+from homeassistant.core import HomeAssistant
 
 
 @pytest.mark.parametrize(

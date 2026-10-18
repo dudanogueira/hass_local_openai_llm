@@ -4,13 +4,11 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from homeassistant.components import conversation
-from homeassistant.core import HomeAssistant
-
-from homeassistant.helpers import llm
-
 from custom_components.local_openai.conversation import LocalAiConversationEntity
 from custom_components.local_openai.tools.stop_talking import StopTalkingTool
+from homeassistant.components import conversation
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers import llm
 
 
 class TestStopTalkingTool:

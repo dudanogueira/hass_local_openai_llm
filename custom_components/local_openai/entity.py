@@ -34,16 +34,12 @@ from openai.types.chat import (
 from openai.types.chat.chat_completion_message_function_tool_call_param import Function
 from openai.types.shared_params import FunctionDefinition, ResponseFormatJSONSchema
 
-from .tools.stop_talking import StopTalkingTool
-
 try:
     from probatio import to_openapi as convert
 except ImportError:
     from voluptuous_openapi import convert
 
 from .const import (
-    CONF_ALWAYS_CONTINUE_CONVERSATION,
-    CONF_ALWAYS_CONTINUE_CONVERSATION_DEFAULT,
     CONF_CHAT_TEMPLATE_KWARGS,
     CONF_CHAT_TEMPLATE_OPTS,
     CONF_CONTENT_INJECTION_METHOD,
@@ -735,9 +731,6 @@ class LocalAiEntity(Entity):
         options = self.options
         server_options = self.server_options
         strip_emojis = options.get(CONF_STRIP_EMOJIS)
-        always_continue_conversation = options.get(
-            CONF_ALWAYS_CONTINUE_CONVERSATION, CONF_ALWAYS_CONTINUE_CONVERSATION_DEFAULT
-        )
 
         # Pass conversation session ID via metadata for LLM proxy tracing (LiteLLM + Langfuse)
         pass_session_id = server_options.get(CONF_PASS_SESSION_ID, False)
@@ -761,10 +754,6 @@ class LocalAiEntity(Entity):
 
         tools: list[ChatCompletionFunctionToolParam] | None = None
         if chat_log.llm_api:
-            if always_continue_conversation:
-                # Append our stop_talking tool
-                chat_log.llm_api.tools.append(StopTalkingTool())
-
             # Sorted by name because intent.async_get() yields tools in registration
             # order, which differs from one restart to the next. Tool schemas render
             # at the start of the prompt, so a reorder invalidates the whole prefix
@@ -878,7 +867,7 @@ class LocalAiEntity(Entity):
                             halt_requested = any(
                                 tool
                                 for tool in content.tool_calls
-                                if tool.tool_name == "stop_talking"
+                                if tool.tool_name.endswith("stop_talking")
                             )
                             break
 
