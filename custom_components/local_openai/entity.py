@@ -34,12 +34,16 @@ from openai.types.chat import (
 from openai.types.chat.chat_completion_message_function_tool_call_param import Function
 from openai.types.shared_params import FunctionDefinition, ResponseFormatJSONSchema
 
+from .tools.stop_talking import StopTalkingTool, StopTalkingNowException
+
 try:
     from probatio import to_openapi as convert
 except ImportError:
     from voluptuous_openapi import convert
 
 from .const import (
+    CONF_ALWAYS_CONTINUE_CONVERSATION,
+    CONF_ALWAYS_CONTINUE_CONVERSATION_DEFAULT,
     CONF_CHAT_TEMPLATE_KWARGS,
     CONF_CHAT_TEMPLATE_OPTS,
     CONF_CONTENT_INJECTION_METHOD,
@@ -731,6 +735,9 @@ class LocalAiEntity(Entity):
         options = self.options
         server_options = self.server_options
         strip_emojis = options.get(CONF_STRIP_EMOJIS)
+        always_continue_conversation = options.get(
+            CONF_ALWAYS_CONTINUE_CONVERSATION, CONF_ALWAYS_CONTINUE_CONVERSATION_DEFAULT
+        )
 
         # Pass conversation session ID via metadata for LLM proxy tracing (LiteLLM + Langfuse)
         pass_session_id = server_options.get(CONF_PASS_SESSION_ID, False)
@@ -754,6 +761,10 @@ class LocalAiEntity(Entity):
 
         tools: list[ChatCompletionFunctionToolParam] | None = None
         if chat_log.llm_api:
+            if always_continue_conversation:
+                # Append our stop_talking tool
+                chat_log.llm_api.tools.append(StopTalkingTool())
+
             # Sorted by name because intent.async_get() yields tools in registration
             # order, which differs from one restart to the next. Tool schemas render
             # at the start of the prompt, so a reorder invalidates the whole prefix
@@ -842,18 +853,22 @@ class LocalAiEntity(Entity):
                     stream=True,
                 )
 
+                turn_messages = [
+                    content
+                    async for content in chat_log.async_add_delta_content_stream(
+                        self.entity_id,
+                        self._transform_stream(
+                            stream=result_stream,
+                            strip_emojis=strip_emojis,
+                            conversation_id=conversation_id,
+                            meta=meta,
+                        ),
+                    )
+                ]
+
                 model_args["messages"].extend(
                     [
-                        msg
-                        async for content in chat_log.async_add_delta_content_stream(
-                            self.entity_id,
-                            self._transform_stream(
-                                stream=result_stream,
-                                strip_emojis=strip_emojis,
-                                conversation_id=conversation_id,
-                                meta=meta,
-                            ),
-                        )
+                        msg for content in turn_messages
                         if (
                             msg := await self._convert_content_to_chat_message(
                                 content, conversation_id
@@ -917,6 +932,9 @@ class LocalAiEntity(Entity):
                 _LOGGER.exception("API server returned an error")
                 msg = "API server returned an error. Check the system logs for further details."
                 raise HomeAssistantError(msg) from err
+            except StopTalkingNowException as err:
+                # Thrown from our stop_talking tool, re-raising to be caught by our caller in conversation.py
+                raise err
             except Exception as err:
                 _LOGGER.exception("Error handling API response")
                 msg = "Error handling API response. Check the system logs for further details."

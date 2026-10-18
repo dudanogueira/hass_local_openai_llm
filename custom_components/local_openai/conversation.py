@@ -22,6 +22,7 @@ from .const import (
     SERVER_TYPE_VLLM,
 )
 from .entity import LocalAiEntity
+from .tools.stop_talking import StopTalkingNowException
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigSubentry
@@ -123,17 +124,25 @@ class LocalAiConversationEntity(LocalAiEntity, conversation.ConversationEntity):
         except conversation.ConverseError as err:
             return err.as_conversation_result()
 
-        await self._async_handle_chat_log(
-            chat_log,
-            user_input=user_input,
-            parallel_tool_calls=parallel_tool_calls,
-        )
+        halt_conversation = False
+        try:
+            await self._async_handle_chat_log(
+                chat_log,
+                user_input=user_input,
+                parallel_tool_calls=parallel_tool_calls,
+            )
+        except StopTalkingNowException:
+            # stop_talking tool has been called
+            halt_conversation = True
 
-        # Set continue_conversation flag based on always_continue_conversation setting
         chat_log_result = conversation.async_get_result_from_chat_log(
             user_input, chat_log
         )
-        if always_continue_conversation:
+
+        if halt_conversation:
+            # If we've received our stop_talking halt signal
+            chat_log_result.continue_conversation = False
+        elif always_continue_conversation:
             chat_log_result.continue_conversation = True
 
         return chat_log_result

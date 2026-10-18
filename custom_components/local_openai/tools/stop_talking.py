@@ -1,0 +1,30 @@
+"""Stop Talking tool class."""
+
+import probatio
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers import llm
+
+from custom_components.local_openai.const import DOMAIN, LOGGER
+
+
+class StopTalkingNowException(Exception):
+    pass
+
+
+class StopTalkingTool(llm.Tool):
+    """Stop Talking tool: used to instruct the harness to NOT continue the conversation"""
+
+    integration = DOMAIN
+
+    name = "stop_talking"
+    description = "Call this tool by itself if the user has requested that you stop talking or 'shut up'"
+    parameters = probatio.Schema({})
+
+    async def async_call(
+        self,
+        hass: HomeAssistant,
+        tool_input: llm.ToolInput,
+        llm_context: llm.LLMContext,
+    ) -> llm.ToolResult:
+        LOGGER.debug("StopTalkingTool called by LLM")
+        raise StopTalkingNowException
