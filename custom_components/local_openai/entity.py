@@ -867,7 +867,7 @@ class LocalAiEntity(Entity):
                             halt_requested = any(
                                 tool
                                 for tool in content.tool_calls
-                                if tool.tool_name.endswith("stop_talking")
+                                if tool.tool_name == "stop_talking"
                             )
                             break
 
